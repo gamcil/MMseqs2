@@ -1185,6 +1185,11 @@ void DBReader<T>::readSource(char *data, size_t dataSize, DBReader::SourceEntry 
 
 // TODO: Move to DbUtils?
 
+static const char *const CONTEXT_DB_SUFFIXES[] = {
+    "_context", "_context.index", "_context.dbtype", "_context_features",
+    "_context_feature_names", "_context_scaffolds"
+};
+
 template<typename T>
 void DBReader<T>::moveDatafiles(const std::vector<std::string>& files, const std::string& destination) {
     for (size_t i = 0; i < files.size(); i++) {
@@ -1217,6 +1222,12 @@ void DBReader<T>::moveDb(const std::string &srcDbName, const std::string &dstDbN
     if (FileUtil::fileExists((srcDbName + ".lookup").c_str())) {
         FileUtil::move((srcDbName + ".lookup").c_str(), (dstDbName + ".lookup").c_str());
     }
+    for (size_t i = 0; i < ARRAY_SIZE(CONTEXT_DB_SUFFIXES); ++i) {
+        const std::string source = srcDbName + CONTEXT_DB_SUFFIXES[i];
+        if (FileUtil::fileExists(source.c_str())) {
+            FileUtil::move(source.c_str(), (dstDbName + CONTEXT_DB_SUFFIXES[i]).c_str());
+        }
+    }
 }
 
 template<typename T>
@@ -1240,6 +1251,12 @@ void DBReader<T>::removeDb(const std::string &databaseName){
     std::string lookupFile = databaseName + ".lookup";
     if (FileUtil::fileExists(lookupFile.c_str())) {
         FileUtil::remove(lookupFile.c_str());
+    }
+    for (size_t i = 0; i < ARRAY_SIZE(CONTEXT_DB_SUFFIXES); ++i) {
+        const std::string file = databaseName + CONTEXT_DB_SUFFIXES[i];
+        if (FileUtil::fileExists(file.c_str())) {
+            FileUtil::remove(file.c_str());
+        }
     }
 }
 
@@ -1283,6 +1300,12 @@ void copyLinkDb(const std::string &databaseName, const std::string &outDb, DBFil
         { DBFiles::TAX_NODES,     "_nodes.dmp"        },
         { DBFiles::TAX_MERGED,    "_merged.dmp"       },
         { DBFiles::TAX_MERGED,    "_taxonomy"         },
+        { DBFiles::CONTEXT,           CONTEXT_DB_SUFFIXES[0] },
+        { DBFiles::CONTEXT_IDX,       CONTEXT_DB_SUFFIXES[1] },
+        { DBFiles::CONTEXT_TYPE,      CONTEXT_DB_SUFFIXES[2] },
+        { DBFiles::CONTEXT_FEATURES,  CONTEXT_DB_SUFFIXES[3] },
+        { DBFiles::CONTEXT_NAMES,     CONTEXT_DB_SUFFIXES[4] },
+        { DBFiles::CONTEXT_SCAFFOLDS, CONTEXT_DB_SUFFIXES[5] },
         { DBFiles::CA3M_DATA,     "_ca3m.ffdata"      },
         { DBFiles::CA3M_INDEX,    "_ca3m.ffindex"     },
         { DBFiles::CA3M_SEQ,      "_sequence.ffdata"  },

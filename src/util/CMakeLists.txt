@@ -19,6 +19,8 @@ set(util_source_files
         util/indexdb.cpp
         util/offsetalignment.cpp
         util/createseqfiledb.cpp
+        util/ContextDb.cpp
+        util/createcontextdb.cpp
         util/createsubdb.cpp
         util/view.cpp
         util/createtsv.cpp
@@ -54,6 +56,7 @@ set(util_source_files
         util/result2dnamsa.cpp
         util/result2flat.cpp
         util/result2msa.cpp
+        util/result2context.cpp
         util/result2rbh.cpp
         util/result2profile.cpp
         util/result2repseq.cpp

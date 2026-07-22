@@ -30,6 +30,10 @@ extern int makepaddedseqdb(int argc, const char **argv, const Command& command);
 extern int createindex(int argc, const char **argv, const Command& command);
 extern int createlinindex(int argc, const char **argv, const Command& command);
 extern int createseqfiledb(int argc, const char **argv, const Command& command);
+extern int createcontextdb(int argc, const char **argv, const Command& command);
+extern int createcontextresolve(int argc, const char **argv, const Command& command);
+extern int createcontextcontexts(int argc, const char **argv, const Command& command);
+extern int createcontextdbcore(int argc, const char **argv, const Command& command);
 extern int createsubdb(int argc, const char **argv, const Command& command);
 extern int gpuserver(int argc, const char **argv, const Command& command);
 extern int view(int argc, const char **argv, const Command& command);
@@ -112,6 +116,7 @@ extern int recoverlongestorf(int argc, const char **argv, const Command& command
 extern int result2flat(int argc, const char **argv, const Command& command);
 extern int result2msa(int argc, const char **argv, const Command& command);
 extern int result2dnamsa(int argc, const char **argv, const Command& command);
+extern int result2context(int argc, const char **argv, const Command& command);
 extern int result2profile(int argc, const char **argv, const Command& command);
 extern int result2rbh(int argc, const char **argv, const Command& command);
 extern int result2repseq(int argc, const char **argv, const Command& command);

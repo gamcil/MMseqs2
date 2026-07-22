@@ -16,6 +16,7 @@ set(GENERATED_WORKFLOWS
         workflow/searchtargetprofile.sh
         workflow/createindex.sh
         workflow/createtaxdb.sh
+        workflow/createcontextdb.sh
         workflow/translated_search.sh
         workflow/taxpercontig.sh
         workflow/multihitdb.sh

@@ -311,6 +311,11 @@ Parameters::Parameters():
         PARAM_TAX_MAPPING_FILE(PARAM_TAX_MAPPING_FILE_ID, "--tax-mapping-file", "Taxonomy mapping file", "File to map sequence identifier to taxonomical identifier", typeid(std::string), (void *) &taxMappingFile, ""),
         PARAM_TAX_MAPPING_MODE(PARAM_TAX_MAPPING_MODE_ID, "--tax-mapping-mode", "Taxonomy mapping mode", "Map taxonomy based on sequence database 0: .lookup file 1: .source file", typeid(int), (void *) &taxMappingMode, "^[0-1]{1}$"),
         PARAM_TAX_DB_MODE(PARAM_TAX_DB_MODE_ID, "--tax-db-mode", "Taxonomy db mode", "Create taxonomy database as: 0: .dmp flat files (human readable) 1: binary dump (faster readin)", typeid(int), (void *) &taxDbMode, "^[0-1]{1}$"),
+        // createcontextdb
+        PARAM_CONTEXT_WINDOW(PARAM_CONTEXT_WINDOW_ID, "--context-window", "Context window", "Number of neighboring features to keep on each side of an anchor (max. 255)", typeid(int), (void *) &contextWindow, "^[0-9]{1}[0-9]*$"),
+        PARAM_CONTEXT_COLLAPSE_OVERLAP(PARAM_CONTEXT_COLLAPSE_OVERLAP_ID, "--context-collapse-overlap", "Context collapse overlap", "Collapse same-strand features when overlap covers this fraction of the shorter feature (0 disables)", typeid(float), (void *) &contextCollapseOverlap, "^0(\\.[0-9]+)?|^1(\\.0+)?$"),
+        PARAM_CONTEXT_ID_MODE(PARAM_CONTEXT_ID_MODE_ID, "--context-id-mode", "Context ID mode", "Interpret target_sequence_id as 0: MMseqs DB keys, 1: sequence identifiers in .lookup", typeid(int), (void *) &contextIdMode, "^[0-1]{1}$"),
+        PARAM_SORT_MEMORY(PARAM_SORT_MEMORY_ID, "--sort-memory", "Sort memory", "Memory limit passed to Unix sort -S (for example 50% or 16G)", typeid(std::string), (void *) &sortMemory, ""),
         // expandaln
         PARAM_EXPANSION_MODE(PARAM_EXPANSION_MODE_ID, "--expansion-mode", "Expansion mode", "Update score, E-value, and sequence identity by 0: input alignment 1: rescoring the inferred backtrace", typeid(int), (void *) &expansionMode, "^[0-2]{1}$"),
         PARAM_EXPAND_FILTER_CLUSTERS(PARAM_EXPAND_FILTER_CLUSTERS_ID, "--expand-filter-clusters", "Expand filter clusters", "Filter each target cluster during expansion 0: no filter 1: filter", typeid(int), (void *) &expandFilterClusters, "^[0-1]{1}$"),
@@ -1254,6 +1259,28 @@ Parameters::Parameters():
     createtaxdb.push_back(&PARAM_TAX_DB_MODE);
     createtaxdb.push_back(&PARAM_THREADS);
     createtaxdb.push_back(&PARAM_V);
+
+    // createcontextdb
+    createcontextdb.push_back(&PARAM_CONTEXT_WINDOW);
+    createcontextdb.push_back(&PARAM_CONTEXT_COLLAPSE_OVERLAP);
+    createcontextdb.push_back(&PARAM_CONTEXT_ID_MODE);
+    createcontextdb.push_back(&PARAM_SORT_MEMORY);
+    createcontextdb.push_back(&PARAM_COMPRESSED);
+    createcontextdb.push_back(&PARAM_REMOVE_TMP_FILES);
+    createcontextdb.push_back(&PARAM_V);
+
+    // createcontextresolve
+    createcontextresolve.push_back(&PARAM_CONTEXT_ID_MODE);
+    createcontextresolve.push_back(&PARAM_V);
+
+    // createcontextcontexts
+    createcontextcontexts.push_back(&PARAM_CONTEXT_WINDOW);
+    createcontextcontexts.push_back(&PARAM_CONTEXT_COLLAPSE_OVERLAP);
+    createcontextcontexts.push_back(&PARAM_V);
+
+    // createcontextdbcore
+    createcontextdbcore.push_back(&PARAM_COMPRESSED);
+    createcontextdbcore.push_back(&PARAM_V);
 
     // addtaxonomy
     addtaxonomy.push_back(&PARAM_TAXON_ADD_LINEAGE);
@@ -2267,6 +2294,26 @@ void Parameters::printTaxDbError(const std::string &filename, const std::vector<
     }
 }
 
+std::vector<std::string> Parameters::findMissingContextDbFiles(const std::string &filename) {
+    std::vector<std::string> missingFiles;
+    const std::vector<std::string> suffices = {"_context", "_context.index", "_context.dbtype",
+                                               "_context_features", "_context_feature_names",
+                                               "_context_scaffolds"};
+    for (size_t i = 0; i < suffices.size(); ++i) {
+        if (FileUtil::fileExists((filename + suffices[i]).c_str()) == false) {
+            missingFiles.emplace_back(filename + suffices[i]);
+        }
+    }
+    return missingFiles;
+}
+
+void Parameters::printContextDbError(const std::string &filename, const std::vector<std::string>& missingFiles) {
+    Debug(Debug::ERROR) << "Input sequence database \"" << filename << "\" is missing context files:\n";
+    for (size_t i = 0; i < missingFiles.size(); ++i) {
+        Debug(Debug::ERROR) << "- " << missingFiles[i] << "\n";
+    }
+}
+
 void Parameters::checkIfDatabaseIsValid(const Command& command, int argc, const char** argv, bool isStartVar, bool isMiddleVar, bool isEndVar) {
     size_t fileIdx = 0;
     for (size_t dbIdx = 0; dbIdx < command.databases.size(); dbIdx++) {
@@ -2311,6 +2358,14 @@ void Parameters::checkIfDatabaseIsValid(const Command& command, int argc, const 
                     if (missingFiles.empty() == false) {
                         printParameters(command.cmd, argc, argv, *command.params);
                         printTaxDbError(filenames[fileIdx], missingFiles);
+                        EXIT(EXIT_FAILURE);
+                    }
+                }
+                if (db.specialType & DbType::NEED_CONTEXT) {
+                    std::vector<std::string> missingFiles = findMissingContextDbFiles(filenames[fileIdx]);
+                    if (missingFiles.empty() == false) {
+                        printParameters(command.cmd, argc, argv, *command.params);
+                        printContextDbError(filenames[fileIdx], missingFiles);
                         EXIT(EXIT_FAILURE);
                     }
                 }
@@ -2777,6 +2832,12 @@ void Parameters::setDefaults() {
     taxMappingMode = 0;
     taxDbMode = 1;
     ncbiTaxDump = "";
+
+    // createcontextdb
+    contextWindow = 5;
+    contextCollapseOverlap = 0.0f;
+    contextIdMode = 1;
+    sortMemory = "";
 
     // filtertaxdb, filtertaxseqdb
     taxonList = "";

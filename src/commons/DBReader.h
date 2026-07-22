@@ -40,7 +40,12 @@ struct DBFiles {
         CA3M_HDR          = (1ull << 16),
         CA3M_HDR_IDX      = (1ull << 17),
         TAX_BINARY        = (1ull << 18),
-
+        CONTEXT           = (1ull << 19),
+        CONTEXT_IDX       = (1ull << 20),
+        CONTEXT_TYPE      = (1ull << 21),
+        CONTEXT_FEATURES  = (1ull << 22),
+        CONTEXT_NAMES     = (1ull << 23),
+        CONTEXT_SCAFFOLDS = (1ull << 24),
 
         GENERIC           = DATA | DATA_INDEX | DATA_DBTYPE,
         HEADERS           = HEADER | HEADER_INDEX | HEADER_DBTYPE,

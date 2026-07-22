@@ -733,6 +733,12 @@ public:
     int taxMappingMode;
     int taxDbMode;
 
+    // createcontextdb
+    int contextWindow;
+    float contextCollapseOverlap;
+    int contextIdMode;
+    std::string sortMemory;
+
     // exapandaln
     int expansionMode;
     int expandFilterClusters;
@@ -1130,6 +1136,12 @@ public:
     PARAMETER(PARAM_TAX_MAPPING_MODE)
     PARAMETER(PARAM_TAX_DB_MODE)
 
+    // createcontextdb
+    PARAMETER(PARAM_CONTEXT_WINDOW)
+    PARAMETER(PARAM_CONTEXT_COLLAPSE_OVERLAP)
+    PARAMETER(PARAM_CONTEXT_ID_MODE)
+    PARAMETER(PARAM_SORT_MEMORY)
+
     // exapandaln
     PARAMETER(PARAM_EXPANSION_MODE)
     PARAMETER(PARAM_EXPAND_FILTER_CLUSTERS)
@@ -1280,6 +1292,10 @@ public:
     std::vector<MMseqsParameter*> createsubdb;
     std::vector<MMseqsParameter*> renamedbkeys;
     std::vector<MMseqsParameter*> createtaxdb;
+    std::vector<MMseqsParameter*> createcontextdb;
+    std::vector<MMseqsParameter*> createcontextresolve;
+    std::vector<MMseqsParameter*> createcontextcontexts;
+    std::vector<MMseqsParameter*> createcontextdbcore;
     std::vector<MMseqsParameter*> profile2pssm;
     std::vector<MMseqsParameter*> profile2neff;
     std::vector<MMseqsParameter*> profile2seq;
@@ -1317,6 +1333,8 @@ public:
 
     static std::vector<std::string> findMissingTaxDbFiles(const std::string &filename);
     static void printTaxDbError(const std::string &filename, const std::vector<std::string>& missingFiles);
+    static std::vector<std::string> findMissingContextDbFiles(const std::string &filename);
+    static void printContextDbError(const std::string &filename, const std::vector<std::string>& missingFiles);
 
     static const uint32_t DBTYPE_MASK = 0x0000FFFF;
 

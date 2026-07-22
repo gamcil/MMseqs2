@@ -84,6 +84,7 @@ struct DbType{
     static const int NEED_TAXONOMY = 4;
     static const int VARIADIC = 8;
     static const int ZERO_OR_ALL = 16;
+    static const int NEED_CONTEXT = 32;
 
     const char *usageText;
     int accessMode;
