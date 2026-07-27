@@ -30,6 +30,10 @@ SORT_MEMORY_PAR=""
 if [ -n "$SORT_MEMORY" ]; then
     SORT_MEMORY_PAR="-S ${SORT_MEMORY}"
 fi
+SORT_PARALLEL_PAR=""
+if sort --help 2>&1 | grep -q -- "--parallel"; then
+    SORT_PARALLEL_PAR="--parallel=${SORT_THREADS}"
+fi
 
 FEATURES_BY_ID="${TMP_PATH}/features.by_id"
 LOOKUP_SORTED="${TMP_PATH}/lookup.sorted"
@@ -40,7 +44,7 @@ CONTEXT_ROWS_SORTED="${TMP_PATH}/context.rows.sorted"
 
 # Sort by first field accession for matching to sequence db
 # shellcheck disable=SC2086
-LC_ALL=C sort -t "$TAB" ${SORT_MEMORY_PAR} -T "$TMP_PATH" \
+LC_ALL=C sort -t "$TAB" ${SORT_MEMORY_PAR} ${SORT_PARALLEL_PAR} -T "$TMP_PATH" \
     -k1,1 \
     "$INPUT" > "$FEATURES_BY_ID" \
     || fail "feature table id sort failed"
@@ -53,7 +57,7 @@ fi
 
 # Sort lookup by the same identifier mode as before
 # shellcheck disable=SC2086
-LC_ALL=C sort -t "$TAB" ${SORT_MEMORY_PAR} -T "$TMP_PATH" \
+LC_ALL=C sort -t "$TAB" ${SORT_MEMORY_PAR} ${SORT_PARALLEL_PAR} -T "$TMP_PATH" \
     ${LOOKUP_SORT_KEYS} \
     "$LOOKUP" > "$LOOKUP_SORTED" \
     || fail "lookup sort failed"
@@ -65,7 +69,7 @@ LC_ALL=C sort -t "$TAB" ${SORT_MEMORY_PAR} -T "$TMP_PATH" \
 
 # Sort features into genomic order by scaffold and coordinates
 # shellcheck disable=SC2086
-LC_ALL=C sort -t "$TAB" ${SORT_MEMORY_PAR} -T "$TMP_PATH" \
+LC_ALL=C sort -t "$TAB" ${SORT_MEMORY_PAR} ${SORT_PARALLEL_PAR} -T "$TMP_PATH" \
     -k4,4 -k5,5n -k6,6n -k3,3 \
     "$FEATURES_RESOLVED" > "$FEATURES_RESOLVED_SORTED" \
     || fail "resolved feature coordinate sort failed"
@@ -77,7 +81,7 @@ LC_ALL=C sort -t "$TAB" ${SORT_MEMORY_PAR} -T "$TMP_PATH" \
 
 # Group context locators by target key
 # shellcheck disable=SC2086
-LC_ALL=C sort -t "$TAB" ${SORT_MEMORY_PAR} -T "$TMP_PATH" \
+LC_ALL=C sort -t "$TAB" ${SORT_MEMORY_PAR} ${SORT_PARALLEL_PAR} -T "$TMP_PATH" \
     -k1,1n \
     "$CONTEXT_ROWS" > "$CONTEXT_ROWS_SORTED" \
     || fail "context sort failed"

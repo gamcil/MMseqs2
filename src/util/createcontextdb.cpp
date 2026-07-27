@@ -465,6 +465,7 @@ int createcontextdb(int argc, const char **argv, const Command &command) {
     cmd.addVariable("REMOVE_TMP", par.removeTmpFiles ? "TRUE" : NULL);
     cmd.addVariable("CONTEXT_ID_MODE", SSTR(par.contextIdMode).c_str());
     cmd.addVariable("SORT_MEMORY", par.sortMemory.empty() ? NULL : par.sortMemory.c_str());
+    cmd.addVariable("SORT_THREADS", SSTR(par.threads).c_str());
     cmd.addVariable("CREATECONTEXTRESOLVE_PAR", par.createParameterString(par.createcontextresolve, true).c_str());
     cmd.addVariable("CREATECONTEXTCONTEXTS_PAR", par.createParameterString(par.createcontextcontexts, true).c_str());
     cmd.addVariable("CREATECONTEXTDBCORE_PAR", par.createParameterString(par.createcontextdbcore, true).c_str());

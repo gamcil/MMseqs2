@@ -433,7 +433,7 @@ std::vector<Command> baseCommands = {
                 "# Feature columns: target_sequence_id, feature_id, scaffold, start, end, strand\n"
                 "# Coordinates are inclusive; strand accepts 1, -1, +, or -\n"
                 "mmseqs createcontextdb targetDB features.tsv tmp --context-window 5\n",
-                "Gustavo A. C. <gamcil@github>",
+                "Cameron L.M. Gilchrist <gamcil@snu.ac.kr>",
                 "<i:sequenceDB> <i:featureTable> <tmpDir>",
                 CITATION_MMSEQS2, {{"sequenceDB", DbType::ACCESS_MODE_INPUT, DbType::NEED_DATA|DbType::NEED_LOOKUP, &DbValidator::sequenceDb },
                                    {"featureTable", DbType::ACCESS_MODE_INPUT, DbType::NEED_DATA, &DbValidator::flatfile },
@@ -441,7 +441,7 @@ std::vector<Command> baseCommands = {
         {"createcontextresolve", createcontextresolve, &par.createcontextresolve, COMMAND_DATABASE_CREATION | COMMAND_EXPERT | COMMAND_HIDDEN,
                 "Resolve context feature anchors against sorted target lookup",
                 NULL,
-                "Gustavo A. C. <gamcil@github>",
+                "Cameron L.M. Gilchrist <gamcil@snu.ac.kr>",
                 "<i:lookupTsv> <i:featureTable> <o:resolvedFeatureTable>",
                 CITATION_MMSEQS2, {{"lookupTsv", DbType::ACCESS_MODE_INPUT, DbType::NEED_DATA, &DbValidator::flatfile },
                                    {"featureTable", DbType::ACCESS_MODE_INPUT, DbType::NEED_DATA, &DbValidator::flatfile },
@@ -449,7 +449,7 @@ std::vector<Command> baseCommands = {
         {"createcontextcontexts", createcontextcontexts, &par.createcontextcontexts, COMMAND_DATABASE_CREATION | COMMAND_EXPERT | COMMAND_HIDDEN,
                 "Create compact genomic contexts",
                 NULL,
-                "Gustavo A. C. <gamcil@github>",
+                "Cameron L.M. Gilchrist <gamcil@snu.ac.kr>",
                 "<i:resolvedFeatureTable> <o:contextRows> <o:contextDB>",
                 CITATION_MMSEQS2, {{"resolvedFeatureTable", DbType::ACCESS_MODE_INPUT, DbType::NEED_DATA, &DbValidator::flatfile },
                                    {"contextRows", DbType::ACCESS_MODE_OUTPUT, DbType::NEED_DATA, &DbValidator::flatfile },
@@ -457,7 +457,7 @@ std::vector<Command> baseCommands = {
         {"createcontextdbcore", createcontextdbcore, &par.createcontextdbcore, COMMAND_DATABASE_CREATION | COMMAND_EXPERT | COMMAND_HIDDEN,
                 "Create genomic context database from compact context rows",
                 NULL,
-                "Gustavo A. C. <gamcil@github>",
+                "Cameron L.M. Gilchrist <gamcil@snu.ac.kr>",
                 "<i:contextRows> <o:contextDB>",
                 CITATION_MMSEQS2, {{"contextRows", DbType::ACCESS_MODE_INPUT, DbType::NEED_DATA, &DbValidator::flatfile },
                                    {"contextDB", DbType::ACCESS_MODE_OUTPUT, DbType::NEED_DATA, &DbValidator::genericDb }}},
@@ -1121,7 +1121,7 @@ std::vector<Command> baseCommands = {
                 "# Write genomic contexts as a query-keyed result database\n"
                 "# Columns: hit_target_key, anchor_feature_id, relative_position, feature_target_key, target_sequence_id, feature_id, scaffold, start, end, strand\n"
                 "mmseqs result2context queryDB targetDB resultDB contextDB\n",
-                "Gustavo A. C. <gamcil@github>",
+                "Cameron L.M. Gilchrist <gamcil@snu.ac.kr>",
                 "<i:queryDB> <i:targetDB> <i:alignmentDB> <o:contextDB>",
                 CITATION_MMSEQS2, {{"queryDB", DbType::ACCESS_MODE_INPUT, DbType::NEED_DATA, &DbValidator::sequenceDb },
                                           {"targetDB", DbType::ACCESS_MODE_INPUT, DbType::NEED_DATA|DbType::NEED_LOOKUP|DbType::NEED_CONTEXT, &DbValidator::sequenceDb },

@@ -1265,6 +1265,7 @@ Parameters::Parameters():
     createcontextdb.push_back(&PARAM_CONTEXT_COLLAPSE_OVERLAP);
     createcontextdb.push_back(&PARAM_CONTEXT_ID_MODE);
     createcontextdb.push_back(&PARAM_SORT_MEMORY);
+    createcontextdb.push_back(&PARAM_THREADS);
     createcontextdb.push_back(&PARAM_COMPRESSED);
     createcontextdb.push_back(&PARAM_REMOVE_TMP_FILES);
     createcontextdb.push_back(&PARAM_V);
