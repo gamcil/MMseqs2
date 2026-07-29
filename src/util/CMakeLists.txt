@@ -19,7 +19,6 @@ set(util_source_files
         util/indexdb.cpp
         util/offsetalignment.cpp
         util/createseqfiledb.cpp
-        util/ContextDb.cpp
         util/createcontextdb.cpp
         util/createsubdb.cpp
         util/view.cpp

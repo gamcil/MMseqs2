@@ -87,6 +87,7 @@ public:
     static const int DBTYPE_SEQTAXDB = 18; // needed for verification
     static const int DBTYPE_STDIN = 19; // needed for verification
     static const int DBTYPE_URI = 20; // needed for verification
+    static const int DBTYPE_CONTEXT_DB = 21;
 
     static const unsigned int DBTYPE_EXTENDED_COMPRESSED = 1;
     static const unsigned int DBTYPE_EXTENDED_INDEX_NEED_SRC = 2;
@@ -1333,8 +1334,6 @@ public:
 
     static std::vector<std::string> findMissingTaxDbFiles(const std::string &filename);
     static void printTaxDbError(const std::string &filename, const std::vector<std::string>& missingFiles);
-    static std::vector<std::string> findMissingContextDbFiles(const std::string &filename);
-    static void printContextDbError(const std::string &filename, const std::vector<std::string>& missingFiles);
 
     static const uint32_t DBTYPE_MASK = 0x0000FFFF;
 
@@ -1361,6 +1360,7 @@ public:
             case DBTYPE_FLATFILE: return "Flatfile";
             case DBTYPE_STDIN: return "stdin";
             case DBTYPE_URI: return "uri";
+            case DBTYPE_CONTEXT_DB: return "Context";
 
             default: return "Unknown";
         }

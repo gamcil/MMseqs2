@@ -6,10 +6,10 @@
 #include <fstream>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "CommandCaller.h"
-#include "ContextDb.h"
 #include "DBWriter.h"
 #include "Debug.h"
 #include "FileUtil.h"
@@ -21,16 +21,12 @@ struct ContextFeature {
     std::string targetSequenceId;
     std::string featureId;
     std::string scaffold;
-    uint32_t start;
-    uint32_t end;
+    uint64_t start;
+    uint64_t end;
     int8_t strand;
     DBKeyType dbKey;
-    uint32_t scaffoldId;
-    uint32_t compactId;
     std::vector<DBKeyType> anchorKeys;
 };
-
-static const uint32_t FEATURE_ID_INVALID = std::numeric_limits<uint32_t>::max();
 
 static std::string fieldString(const char *field) {
     return std::string(field, Util::skipNonTab(field));
@@ -116,46 +112,47 @@ static void appendAnchorKeys(std::vector<DBKeyType> &target, const std::vector<D
     }
 }
 
-static void collapseFeature(ContextFeature &kept, const ContextFeature &candidate) {
-    std::vector<DBKeyType> anchorKeys = kept.anchorKeys;
-    appendAnchorKeys(anchorKeys, candidate.anchorKeys);
+static void collapseFeature(ContextFeature &kept, ContextFeature &&candidate) {
     const bool keptMapped = kept.anchorKeys.empty() == false;
     const bool candidateMapped = candidate.anchorKeys.empty() == false;
     const bool preferCandidate = (keptMapped == false && candidateMapped) ||
                                  (keptMapped == candidateMapped &&
                                   featureLength(candidate) > featureLength(kept));
+    std::vector<DBKeyType> anchorKeys = std::move(kept.anchorKeys);
+    appendAnchorKeys(anchorKeys, candidate.anchorKeys);
     if (preferCandidate) {
-        kept = candidate;
+        kept = std::move(candidate);
     }
     kept.anchorKeys.swap(anchorKeys);
 }
 
-static uint32_t ensureFeatureId(ContextDbWriter &writer, ContextFeature &feature) {
-    if (feature.compactId == FEATURE_ID_INVALID) {
-        feature.compactId = writer.writeFeature(
-            feature.featureId, feature.targetSequenceId, feature.dbKey,
-            feature.scaffoldId, feature.start, feature.end, feature.strand
-        );
-    }
-    return feature.compactId;
-}
-
-static void emitContext(std::ofstream &out, ContextDbWriter &writer, std::deque<ContextFeature> &features,
+static void emitContext(std::ofstream &out, std::deque<ContextFeature> &features,
                         size_t anchorIndex, int window) {
     ContextFeature &anchor = features[anchorIndex];
     if (anchor.anchorKeys.empty()) return;  // skip non-anchor features
     size_t windowStart = anchorIndex > static_cast<size_t>(window) ? anchorIndex - window : 0;
     size_t windowEnd = std::min(features.size() - 1, anchorIndex + static_cast<size_t>(window));
-    uint32_t firstFeatureId = ensureFeatureId(writer, features[windowStart]);
-    for (size_t idx = windowStart + 1; idx <= windowEnd; ++idx) {
-        ensureFeatureId(writer, features[idx]);
-    }
     for (size_t i = 0; i < anchor.anchorKeys.size(); ++i) {
-        // anchor db key \t first feature id in context \t #features left of anchor \t #features right of anchor
+        // anchor db key \t scaffold \t #features left \t #features right
+        // followed by target key, target sequence id, feature id, start, end, strand for each feature
         out << anchor.anchorKeys[i] << '\t'
-            << firstFeatureId << '\t'
+            << anchor.scaffold << '\t'
             << anchorIndex - windowStart << '\t'
-            << windowEnd - anchorIndex << '\n';
+            << windowEnd - anchorIndex;
+        for (size_t idx = windowStart; idx <= windowEnd; ++idx) {
+            const ContextFeature &feature = features[idx];
+            out << '\t';
+            if (feature.dbKey == DB_KEY_INVALID) {
+                out << "-\t" << feature.targetSequenceId;
+            } else {
+                out << feature.dbKey << "\t-";
+            }
+            out << '\t' << feature.featureId
+                << '\t' << feature.start
+                << '\t' << feature.end
+                << '\t' << (feature.strand < 0 ? -1 : 1);
+        }
+        out << '\n';
     }
     if (out.fail()) {
         Debug(Debug::ERROR) << "Could not write context row\n";
@@ -163,11 +160,11 @@ static void emitContext(std::ofstream &out, ContextDbWriter &writer, std::deque<
     }
 }
 
-static void queueFeature(std::ofstream &out, ContextDbWriter &writer, std::deque<ContextFeature> &features,
-                         size_t &nextAnchor, const ContextFeature &feature, int window) {
-    features.push_back(feature);
+static void queueFeature(std::ofstream &out, std::deque<ContextFeature> &features,
+                         size_t &nextAnchor, ContextFeature &&feature, int window) {
+    features.push_back(std::move(feature));
     while (nextAnchor + static_cast<size_t>(window) < features.size()) {
-        emitContext(out, writer, features, nextAnchor, window);
+        emitContext(out, features, nextAnchor, window);
         nextAnchor++;
         if (nextAnchor > static_cast<size_t>(window)) {
             features.pop_front();
@@ -176,10 +173,10 @@ static void queueFeature(std::ofstream &out, ContextDbWriter &writer, std::deque
     }
 }
 
-static void flushScaffold(std::ofstream &out, ContextDbWriter &writer, std::deque<ContextFeature> &features,
+static void flushScaffold(std::ofstream &out, std::deque<ContextFeature> &features,
                           size_t &nextAnchor, int window) {
     while (nextAnchor < features.size()) {
-        emitContext(out, writer, features, nextAnchor, window);
+        emitContext(out, features, nextAnchor, window);
         nextAnchor++;
     }
     features.clear();
@@ -204,15 +201,13 @@ static ContextFeature parseResolvedFeature(const std::string &line, size_t lineN
     requireFeatureField(feature.targetSequenceId, lineNumber, "target_sequence_id");
     requireFeatureField(feature.featureId, lineNumber, "feature_id");
     requireFeatureField(feature.scaffold, lineNumber, "scaffold");
-    feature.start = parseUnsignedFeatureField<uint32_t>(start, lineNumber, "start");
-    feature.end = parseUnsignedFeatureField<uint32_t>(end, lineNumber, "end");
+    feature.start = parseUnsignedFeatureField<uint64_t>(start, lineNumber, "start");
+    feature.end = parseUnsignedFeatureField<uint64_t>(end, lineNumber, "end");
     if (feature.start > feature.end) {
         failInvalidFeatureLine(lineNumber, "start is greater than end");
     }
     feature.strand = parseStrandFeatureField(strand, lineNumber);
     feature.dbKey = dbKey == "-" ? DB_KEY_INVALID : parseUnsignedFeatureField<DBKeyType>(dbKey, lineNumber, "db key");
-    feature.scaffoldId = 0;
-    feature.compactId = FEATURE_ID_INVALID;
     if (feature.dbKey != DB_KEY_INVALID) {
         feature.anchorKeys.push_back(feature.dbKey);
     }
@@ -333,17 +328,12 @@ int createcontextcontexts(int argc, const char **argv, const Command &command) {
         EXIT(EXIT_FAILURE);
     }
 
-    const std::string contextDb = par.db3;
-    ContextDbWriter contextWriter(contextDb);
-
     std::string line;
     size_t lineNumber = 0;
     std::deque<ContextFeature> features;
     std::string currentScaffold;
-    uint32_t currentScaffoldId = 0;
     size_t nextAnchor = 0;
     bool haveScaffold = false;
-    bool scaffoldWritten = false;
     bool havePending = false;
     ContextFeature pending;
 
@@ -355,38 +345,29 @@ int createcontextcontexts(int argc, const char **argv, const Command &command) {
         ContextFeature feature = parseResolvedFeature(line, lineNumber);
         if (haveScaffold == false || feature.scaffold != currentScaffold) {
             if (haveScaffold) {
-                queueFeature(out, contextWriter, features, nextAnchor, pending, par.contextWindow);
+                queueFeature(out, features, nextAnchor, std::move(pending), par.contextWindow);
                 havePending = false;
-                flushScaffold(out, contextWriter, features, nextAnchor, par.contextWindow);
-                if (scaffoldWritten) {
-                    currentScaffoldId++;
-                }
+                flushScaffold(out, features, nextAnchor, par.contextWindow);
             }
             currentScaffold = feature.scaffold;
             haveScaffold = true;
-            scaffoldWritten = false;
-        }
-        feature.scaffoldId = currentScaffoldId;
-        if (scaffoldWritten == false && feature.anchorKeys.empty() == false) {
-            contextWriter.writeScaffold(currentScaffold);
-            scaffoldWritten = true;
         }
 
         if (havePending && isRedundantFeature(pending, feature, par.contextCollapseOverlap)) {
-            collapseFeature(pending, feature);
+            collapseFeature(pending, std::move(feature));
         } else {
             if (havePending) {
-                queueFeature(out, contextWriter, features, nextAnchor, pending, par.contextWindow);
+                queueFeature(out, features, nextAnchor, std::move(pending), par.contextWindow);
             }
-            pending = feature;
+            pending = std::move(feature);
             havePending = true;
         }
     }
 
     if (havePending) {
-        queueFeature(out, contextWriter, features, nextAnchor, pending, par.contextWindow);
+        queueFeature(out, features, nextAnchor, std::move(pending), par.contextWindow);
     }
-    flushScaffold(out, contextWriter, features, nextAnchor, par.contextWindow);
+    flushScaffold(out, features, nextAnchor, par.contextWindow);
     return EXIT_SUCCESS;
 }
 
@@ -399,7 +380,7 @@ int createcontextdbcore(int argc, const char **argv, const Command &command) {
         Debug(Debug::ERROR) << "File " << par.db1 << " not found!\n";
         EXIT(EXIT_FAILURE);
     }
-    DBWriter writer(par.db2.c_str(), par.db2Index.c_str(), 1, par.compressed, Parameters::DBTYPE_GENERIC_DB);
+    DBWriter writer(par.db2.c_str(), par.db2Index.c_str(), 1, par.compressed, Parameters::DBTYPE_CONTEXT_DB);
     writer.open();
 
     std::string line;
@@ -411,29 +392,21 @@ int createcontextdbcore(int argc, const char **argv, const Command &command) {
         if (line.empty()) {
             continue;
         }
-        const char *fields[4];
-        if (Util::getFieldsOfLine(line.c_str(), fields, 4) < 4) {
+        const size_t firstTab = line.find('\t');
+        if (firstTab == std::string::npos || firstTab + 1 == line.size()) {
             Debug(Debug::ERROR) << "Invalid context row\n";
             EXIT(EXIT_FAILURE);
         }
 
-        DBKeyType key = Util::fast_atoi<DBKeyType>(fields[0]);
+        DBKeyType key = Util::fast_atoi<DBKeyType>(line.c_str());
         if (haveKey && key != currentKey) {
             writer.writeData(payload.data(), payload.size(), currentKey, 0);
             payload.clear();
         }
         haveKey = true;
         currentKey = key;
-
-        const uint16_t leftCount = Util::fast_atoi<uint16_t>(fields[2]);
-        const uint16_t rightCount = Util::fast_atoi<uint16_t>(fields[3]);
-        if (leftCount > std::numeric_limits<uint8_t>::max() ||
-            rightCount > std::numeric_limits<uint8_t>::max()) {
-            Debug(Debug::ERROR) << "Invalid context row: neighbor count exceeds 255\n";
-            EXIT(EXIT_FAILURE);
-        }
-        ContextDb::appendContext(payload, Util::fast_atoi<uint32_t>(fields[1]),
-                                 static_cast<uint8_t>(leftCount), static_cast<uint8_t>(rightCount));
+        payload.append(line, firstTab + 1, std::string::npos);
+        payload.push_back('\n');
     }
 
     if (haveKey) {
@@ -455,7 +428,7 @@ int createcontextdb(int argc, const char **argv, const Command &command) {
     }
 
     std::string tmp = par.filenames.back();
-    std::string contextDb = par.db1 + "_context";
+    std::string contextDb = par.db3;
     if (FileUtil::directoryExists(tmp.c_str()) == false && FileUtil::makeDir(tmp.c_str()) == false) {
         Debug(Debug::ERROR) << "Can not create tmp folder " << tmp << ".\n";
         EXIT(EXIT_FAILURE);

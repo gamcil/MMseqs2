@@ -266,7 +266,7 @@ Parameters::Parameters():
         PARAM_CHAIN_ALIGNMENT(PARAM_CHAIN_ALIGNMENT_ID, "--chain-alignments", "Chain overlapping alignments", "Chain overlapping alignments", typeid(int), (void *) &chainAlignment, "^[0-1]{1}", MMseqsParameter::COMMAND_EXPERT),
         PARAM_MERGE_QUERY(PARAM_MERGE_QUERY_ID, "--merge-query", "Merge query", "Combine ORFs/split sequences to a single entry", typeid(int), (void *) &mergeQuery, "^[0-1]{1}", MMseqsParameter::COMMAND_EXPERT),
         // tsv2db
-        PARAM_OUTPUT_DBTYPE(PARAM_OUTPUT_DBTYPE_ID, "--output-dbtype", "Output database type", "Set database type for resulting database: Amino acid sequences 0, Nucl. seq. 1, Profiles 2, Alignment result 5, Clustering result 6, Prefiltering result 7, Taxonomy result 8, Indexed database 9, cA3M MSAs 10, FASTA or A3M MSAs 11, Generic database 12, Omit dbtype file 13, Bi-directional prefiltering result 14, Offsetted headers 15", typeid(int), (void *) &outputDbType, "^(0|[1-9]{1}[0-9]*)$"),
+        PARAM_OUTPUT_DBTYPE(PARAM_OUTPUT_DBTYPE_ID, "--output-dbtype", "Output database type", "Set database type for resulting database: Amino acid sequences 0, Nucl. seq. 1, Profiles 2, Alignment result 5, Clustering result 6, Prefiltering result 7, Taxonomy result 8, Indexed database 9, cA3M MSAs 10, FASTA or A3M MSAs 11, Generic database 12, Omit dbtype file 13, Bi-directional prefiltering result 14, Offsetted headers 15, Context database 21", typeid(int), (void *) &outputDbType, "^(0|[1-9]{1}[0-9]*)$"),
         //diff
         PARAM_USESEQID(PARAM_USESEQID_ID, "--use-seq-id", "Match sequences by their ID", "Sequence ID (Uniprot, GenBank, ...) is used for identifying matches between the old and the new DB", typeid(bool), (void *) &useSequenceId, ""),
         // prefixid
@@ -2295,26 +2295,6 @@ void Parameters::printTaxDbError(const std::string &filename, const std::vector<
     }
 }
 
-std::vector<std::string> Parameters::findMissingContextDbFiles(const std::string &filename) {
-    std::vector<std::string> missingFiles;
-    const std::vector<std::string> suffices = {"_context", "_context.index", "_context.dbtype",
-                                               "_context_features", "_context_feature_names",
-                                               "_context_scaffolds"};
-    for (size_t i = 0; i < suffices.size(); ++i) {
-        if (FileUtil::fileExists((filename + suffices[i]).c_str()) == false) {
-            missingFiles.emplace_back(filename + suffices[i]);
-        }
-    }
-    return missingFiles;
-}
-
-void Parameters::printContextDbError(const std::string &filename, const std::vector<std::string>& missingFiles) {
-    Debug(Debug::ERROR) << "Input sequence database \"" << filename << "\" is missing context files:\n";
-    for (size_t i = 0; i < missingFiles.size(); ++i) {
-        Debug(Debug::ERROR) << "- " << missingFiles[i] << "\n";
-    }
-}
-
 void Parameters::checkIfDatabaseIsValid(const Command& command, int argc, const char** argv, bool isStartVar, bool isMiddleVar, bool isEndVar) {
     size_t fileIdx = 0;
     for (size_t dbIdx = 0; dbIdx < command.databases.size(); dbIdx++) {
@@ -2359,14 +2339,6 @@ void Parameters::checkIfDatabaseIsValid(const Command& command, int argc, const 
                     if (missingFiles.empty() == false) {
                         printParameters(command.cmd, argc, argv, *command.params);
                         printTaxDbError(filenames[fileIdx], missingFiles);
-                        EXIT(EXIT_FAILURE);
-                    }
-                }
-                if (db.specialType & DbType::NEED_CONTEXT) {
-                    std::vector<std::string> missingFiles = findMissingContextDbFiles(filenames[fileIdx]);
-                    if (missingFiles.empty() == false) {
-                        printParameters(command.cmd, argc, argv, *command.params);
-                        printContextDbError(filenames[fileIdx], missingFiles);
                         EXIT(EXIT_FAILURE);
                     }
                 }

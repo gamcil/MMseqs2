@@ -59,6 +59,7 @@ struct DbValidator {
     static std::vector<int> ca3mDb;
     static std::vector<int> msaDb;
     static std::vector<int> genericDb;
+    static std::vector<int> contextDb;
     static std::vector<int> profileDb;
     static std::vector<int> csDb;
     static std::vector<int> indexDb;
@@ -84,7 +85,6 @@ struct DbType{
     static const int NEED_TAXONOMY = 4;
     static const int VARIADIC = 8;
     static const int ZERO_OR_ALL = 16;
-    static const int NEED_CONTEXT = 32;
 
     const char *usageText;
     int accessMode;

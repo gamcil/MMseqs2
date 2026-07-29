@@ -1,63 +1,192 @@
+#include <cstdint>
+#include <limits>
 #include <set>
 #include <string>
-#include <utility>
 
-#include "ContextDb.h"
 #include "DBReader.h"
 #include "DBWriter.h"
 #include "Debug.h"
 #include "Parameters.h"
 #include "Util.h"
 
+struct ContextField {
+    const char *data;
+    size_t length;
+};
+
+struct ContextFeatureView {
+    ContextField targetKey;
+    ContextField targetSequenceId;
+    ContextField featureId;
+    ContextField start;
+    ContextField end;
+    ContextField strand;
+};
+
+// Each context DB payload contains one or more newline-delimited rows:
+// scaffold, left count, right count, then six fields per feature:
+// target key, target sequence ID, feature ID, start, end, strand.
+
 static std::string lookupName(DBReader<DBKeyType> &reader, DBKeyType key) {
     size_t id = reader.getLookupIdByKey(key);
     return id == SIZE_MAX ? SSTR(key) : reader.getLookupEntryName(id);
 }
 
-static void appendFeature(std::string &out, DBKeyType hitTargetKey, const std::string &anchorFeatureId,
-                          int relPos, const ContextFeatureRecord &feature, ContextDbReader &contextDb,
+static bool readField(const char *&ptr, const char *end, ContextField &field) {
+    if (ptr >= end) {
+        return false;
+    }
+    field.data = ptr;
+    while (ptr < end && *ptr != '\t') {
+        ptr++;
+    }
+    field.length = static_cast<size_t>(ptr - field.data);
+    if (ptr < end) {
+        ptr++;
+    }
+    return field.length != 0;
+}
+
+static bool readFeature(const char *&ptr, const char *end, ContextFeatureView &feature) {
+    return readField(ptr, end, feature.targetKey) &&
+           readField(ptr, end, feature.targetSequenceId) &&
+           readField(ptr, end, feature.featureId) &&
+           readField(ptr, end, feature.start) &&
+           readField(ptr, end, feature.end) &&
+           readField(ptr, end, feature.strand);
+}
+
+static uint16_t parseCount(const ContextField &field) {
+    uint32_t value = 0;
+    for (size_t i = 0; i < field.length; ++i) {
+        if (field.data[i] < '0' || field.data[i] > '9') {
+            Debug(Debug::ERROR) << "Invalid context neighbor count\n";
+            EXIT(EXIT_FAILURE);
+        }
+        value = value * 10 + static_cast<uint32_t>(field.data[i] - '0');
+        if (value > 255) {
+            Debug(Debug::ERROR) << "Invalid context neighbor count\n";
+            EXIT(EXIT_FAILURE);
+        }
+    }
+    return static_cast<uint16_t>(value);
+}
+
+static DBKeyType parseTargetKey(const ContextField &field) {
+    DBKeyType value = 0;
+    for (size_t i = 0; i < field.length; ++i) {
+        if (field.data[i] < '0' || field.data[i] > '9') {
+            Debug(Debug::ERROR) << "Invalid mapped context target key\n";
+            EXIT(EXIT_FAILURE);
+        }
+        const DBKeyType digit = static_cast<DBKeyType>(field.data[i] - '0');
+        if (value > (std::numeric_limits<DBKeyType>::max() - digit) / 10) {
+            Debug(Debug::ERROR) << "Invalid mapped context target key\n";
+            EXIT(EXIT_FAILURE);
+        }
+        value = value * 10 + digit;
+    }
+    return value;
+}
+
+static void appendField(std::string &out, const ContextField &field) {
+    out.append(field.data, field.length);
+}
+
+static void appendFeature(std::string &out, DBKeyType hitTargetKey, const ContextField &anchorFeatureId,
+                          int relPos, const ContextField &scaffold, const ContextFeatureView &feature,
                           DBReader<DBKeyType> &targetLookup) {
-    const std::pair<std::string, std::string> names = contextDb.readNames(feature);
-    const bool mapped = feature.targetKey != DB_KEY_INVALID;
-    out.append(SSTR(hitTargetKey)).append("\t")
-       .append(anchorFeatureId).append("\t")
-       .append(SSTR(relPos)).append("\t")
-       .append(mapped ? SSTR(feature.targetKey) : "-").append("\t")
-       .append(mapped ? lookupName(targetLookup, feature.targetKey) : names.second).append("\t")
-       .append(names.first).append("\t")
-       .append(contextDb.scaffoldName(feature.scaffoldId)).append("\t")
-       .append(SSTR(feature.start)).append("\t")
-       .append(SSTR(feature.end)).append("\t")
-       .append(feature.strand < 0 ? "-1\n" : "1\n");
+    const bool mapped = !(feature.targetKey.length == 1 && feature.targetKey.data[0] == '-');
+    out.append(SSTR(hitTargetKey)).append("\t");
+    appendField(out, anchorFeatureId);
+    out.append("\t").append(SSTR(relPos)).append("\t");
+    appendField(out, feature.targetKey);
+    out.append("\t");
+    if (mapped) {
+        out.append(lookupName(targetLookup, parseTargetKey(feature.targetKey)));
+    } else {
+        appendField(out, feature.targetSequenceId);
+    }
+    out.append("\t");
+    appendField(out, feature.featureId);
+    out.append("\t");
+    appendField(out, scaffold);
+    out.append("\t");
+    appendField(out, feature.start);
+    out.append("\t");
+    appendField(out, feature.end);
+    out.append("\t");
+    appendField(out, feature.strand);
+    out.push_back('\n');
+}
+
+static void appendContextLine(std::string &out, DBKeyType hitTargetKey, const char *line,
+                              const char *lineEnd, DBReader<DBKeyType> &targetLookup) {
+    ContextField scaffold;
+    ContextField leftField;
+    ContextField rightField;
+    const char *ptr = line;
+    if (!readField(ptr, lineEnd, scaffold) ||
+        !readField(ptr, lineEnd, leftField) ||
+        !readField(ptr, lineEnd, rightField)) {
+        Debug(Debug::ERROR) << "Invalid context row header\n";
+        EXIT(EXIT_FAILURE);
+    }
+
+    const uint16_t leftCount = parseCount(leftField);
+    const uint16_t rightCount = parseCount(rightField);
+    const uint16_t featureCount = static_cast<uint16_t>(leftCount + rightCount + 1);
+
+    const char *featuresStart = ptr;
+    ContextField anchorFeatureId;
+    for (uint16_t i = 0; i <= leftCount; ++i) {
+        ContextFeatureView feature;
+        if (!readFeature(ptr, lineEnd, feature)) {
+            Debug(Debug::ERROR) << "Invalid context feature row\n";
+            EXIT(EXIT_FAILURE);
+        }
+        if (i == leftCount) {
+            anchorFeatureId = feature.featureId;
+        }
+    }
+
+    ptr = featuresStart;
+    for (uint16_t i = 0; i < featureCount; ++i) {
+        ContextFeatureView feature;
+        if (!readFeature(ptr, lineEnd, feature)) {
+            Debug(Debug::ERROR) << "Invalid context feature row\n";
+            EXIT(EXIT_FAILURE);
+        }
+        appendFeature(out, hitTargetKey, anchorFeatureId,
+                      static_cast<int>(i) - static_cast<int>(leftCount),
+                      scaffold, feature, targetLookup);
+    }
+    if (ptr != lineEnd) {
+        Debug(Debug::ERROR) << "Unexpected fields in context row\n";
+        EXIT(EXIT_FAILURE);
+    }
 }
 
 static void appendContexts(std::string &out, DBKeyType hitTargetKey, char *payload, size_t payloadLength,
-                           ContextDbReader &contextDb, DBReader<DBKeyType> &targetLookup,
-                           std::set<std::pair<DBKeyType, uint32_t> > &seenContexts) {
-    if (payloadLength == 0 || payload[payloadLength - 1] != '\0' ||
-        (payloadLength - 1) % ContextDb::contextRecordSize() != 0) {
-        Debug(Debug::ERROR) << "Invalid context payload length\n";
+                           DBReader<DBKeyType> &targetLookup) {
+    if (payloadLength == 0 || payload[payloadLength - 1] != '\0') {
+        Debug(Debug::ERROR) << "Invalid context payload\n";
         EXIT(EXIT_FAILURE);
     }
+
     const char *ptr = payload;
     const char *end = payload + payloadLength - 1;
     while (ptr < end) {
-        uint32_t firstFeatureId;
-        uint8_t leftCount;
-        uint8_t rightCount;
-        ContextDb::readContext(ptr, end, firstFeatureId, leftCount, rightCount);
-        const uint32_t anchorId = firstFeatureId + leftCount;
-        if (seenContexts.insert(std::make_pair(hitTargetKey, anchorId)).second == false) {
-            continue;
+        const char *lineEnd = ptr;
+        while (lineEnd < end && *lineEnd != '\n') {
+            lineEnd++;
         }
-
-        const std::string anchorFeatureId = contextDb.readNames(contextDb.readFeature(anchorId)).first;
-        const uint16_t featureCount = static_cast<uint16_t>(leftCount) + rightCount + 1;
-        for (uint16_t featurePos = 0; featurePos < featureCount; ++featurePos) {
-            appendFeature(out, hitTargetKey, anchorFeatureId,
-                          static_cast<int>(featurePos) - static_cast<int>(leftCount),
-                          contextDb.readFeature(firstFeatureId + featurePos), contextDb, targetLookup);
+        if (lineEnd == end) {
+            Debug(Debug::ERROR) << "Unterminated context row\n";
+            EXIT(EXIT_FAILURE);
         }
+        appendContextLine(out, hitTargetKey, ptr, lineEnd, targetLookup);
+        ptr = lineEnd + 1;
     }
 }
 
@@ -72,13 +201,11 @@ int result2context(int argc, const char **argv, const Command &command) {
                                      DBReader<DBKeyType>::USE_INDEX | DBReader<DBKeyType>::USE_DATA);
     resultReader.open(DBReader<DBKeyType>::LINEAR_ACCCESS);
 
-    const std::string contextDb = par.db2 + "_context";
-    DBReader<DBKeyType> contextReader(contextDb.c_str(), (contextDb + ".index").c_str(), 1,
+    DBReader<DBKeyType> contextReader(par.db4.c_str(), par.db4Index.c_str(), 1,
                                       DBReader<DBKeyType>::USE_INDEX | DBReader<DBKeyType>::USE_DATA);
     contextReader.open(DBReader<DBKeyType>::NOSORT);
-    ContextDbReader contextDbReader(contextDb);
 
-    DBWriter writer(par.db4.c_str(), par.db4Index.c_str(), 1, false, Parameters::DBTYPE_GENERIC_DB);
+    DBWriter writer(par.db5.c_str(), par.db5Index.c_str(), 1, par.compressed, Parameters::DBTYPE_GENERIC_DB);
     writer.open();
 
     std::string output;
@@ -86,14 +213,16 @@ int result2context(int argc, const char **argv, const Command &command) {
     Debug::Progress progress(resultReader.getSize());
     for (size_t i = 0; i < resultReader.getSize(); ++i) {
         progress.updateProgress();
-        std::set<std::pair<DBKeyType, uint32_t> > seenContexts;
+        std::set<DBKeyType> seenTargets;
         char *data = resultReader.getData(i, 0);
         while (*data != '\0') {
             const DBKeyType targetKey = Util::fast_atoi<DBKeyType>(data);
-            const size_t contextEntryId = contextReader.getId(targetKey);
-            if (contextEntryId != SIZE_MAX) {
-                appendContexts(output, targetKey, contextReader.getData(contextEntryId, 0),
-                               contextReader.getEntryLen(contextEntryId), contextDbReader, targetLookup, seenContexts);
+            if (seenTargets.insert(targetKey).second) {
+                const size_t contextEntryId = contextReader.getId(targetKey);
+                if (contextEntryId != SIZE_MAX) {
+                    appendContexts(output, targetKey, contextReader.getData(contextEntryId, 0),
+                                   contextReader.getEntryLen(contextEntryId), targetLookup);
+                }
             }
             data = Util::skipLine(data);
         }

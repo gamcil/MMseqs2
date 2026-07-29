@@ -74,19 +74,19 @@ LC_ALL=C sort -t "$TAB" ${SORT_MEMORY_PAR} ${SORT_PARALLEL_PAR} -T "$TMP_PATH" \
     "$FEATURES_RESOLVED" > "$FEATURES_RESOLVED_SORTED" \
     || fail "resolved feature coordinate sort failed"
 
-# Collapse redundant features, build contexts, write shared feature data
+# Collapse redundant features and write complete context rows
 # shellcheck disable=SC2086
-"$MMSEQS" createcontextcontexts "$FEATURES_RESOLVED_SORTED" "$CONTEXT_ROWS" "$OUTDB" ${CREATECONTEXTCONTEXTS_PAR} \
+"$MMSEQS" createcontextcontexts "$FEATURES_RESOLVED_SORTED" "$CONTEXT_ROWS" ${CREATECONTEXTCONTEXTS_PAR} \
     || fail "createcontextcontexts died"
 
-# Group context locators by target key
+# Group context rows by target key
 # shellcheck disable=SC2086
 LC_ALL=C sort -t "$TAB" ${SORT_MEMORY_PAR} ${SORT_PARALLEL_PAR} -T "$TMP_PATH" \
     -k1,1n \
     "$CONTEXT_ROWS" > "$CONTEXT_ROWS_SORTED" \
     || fail "context sort failed"
 
-# Pack grouped locators into mmseqs context db
+# Pack grouped context rows into a standalone mmseqs context db
 # shellcheck disable=SC2086
 "$MMSEQS" createcontextdbcore "$CONTEXT_ROWS_SORTED" "$OUTDB" ${CREATECONTEXTDBCORE_PAR} \
     || fail "createcontextdbcore died"
