@@ -13,7 +13,7 @@ hasCommand () {
     command -v "$1" >/dev/null 2>&1
 }
 
-notExists "$1" && echo "$1 not found!" && exit 1;
+notExists "$1.dbtype" && echo "$1.dbtype not found!" && exit 1;
 notExists "$2" && echo "$2 not found!" && exit 1;
 
 hasCommand sort || fail "sort not found in PATH"
